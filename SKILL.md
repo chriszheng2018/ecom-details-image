@@ -32,7 +32,9 @@ description: Create visual concepts, image-generation prompts, and optional AI-g
 
 > 通道 A、B 的英文 Prompt + GPT-Image-2 铁律体系保持不变，不受通道 C 影响。通道 C 的 t2i（无参考图）沿用同一套英文铁律；i2i（有参考图）改用中文 Prompt（见下方通道 C 专节）。
 
-> **落盘与命名统一约定（A/B/C 通用）**：全部通道产物统一落 `<CWD>/output/ecom-details-image/<slug>/`（`<slug>` 为产品短名（中英文均可）；`<CWD>` 为 agent 调用时的**当前工作目录**）。文件名加通道前缀：A=`IMG-`、B=`GPT-`、C=`CF-`(Qwen)/`JM-`(即梦)/`KL-`(可灵)。注意 `<CWD>` **不保证等于项目根**（agent 可能从子目录启动）；在其它工作区调用本 skill 时 `<CWD>` 指向该调用方工作区。若需把产物钉死在特定根目录，用 `--output-dir` 传入绝对路径覆盖默认落盘。
+> **落盘与命名统一约定（A/B/C 通用）**：全部通道产物统一落 `<CWD>/output/ecom-details-image/<slug>/`（`<slug>` 为产品短名，**默认用中文短名，英文也接受**；`<CWD>` 为 agent 调用时的**当前工作目录**）。文件名加通道前缀：A=`IMG-`、B=`GPT-`、C=`CF-`(Qwen)/`JM-`(即梦)/`KL-`(可灵)。注意 `<CWD>` **不保证等于项目根**（agent 可能从子目录启动）；在其它工作区调用本 skill 时 `<CWD>` 指向该调用方工作区。若需把产物钉死在特定根目录，用 `--output-dir` 传入绝对路径覆盖默认落盘。
+>
+> **中文 slug 与路径兼容**：slug 用中文会产生中文输出目录（如 `<CWD>/output/ecom-details-image/洗衣凝珠详情页/`）。该目录会被传给 dreamina / kling / `run_qwen21.py` 等外部二进制，路径一律用 Windows 原生 `E:/...` 写法，禁用 Git Bash 的 `/e/...`；中文 Prompt 仍走 `$(cat ...)` 铁律，与目录名无关。若实测某引擎不接受中文路径，用已有的 `--output-dir` 机制传入一个英文绝对路径覆盖默认落盘（如 `--output-dir "E:/output/ecom-details-image/pods-pdp"`），不新增任何参数。
 
 > **提示词与报告落盘（A/B/C + 两模式通用，增量约定）**：除图片产物外，还须把"提示词/报告"一并存档，便于复现与审计。归档动作统一集成在「核心流程」中，不按模式分叉：
 > - **`brief_prompt-<slug>.md`（由核心流程第 9 步「提示词备忘录归档」统一产出）**：汇总报告文件，落 `<CWD>/output/ecom-details-image/<slug>/brief_prompt-<slug>.md`。**Brief/Prompt 与 Generate 两种模式都执行核心流程第 9 步，故天然都落盘**，无需分叉强调；对 Generate 而言，因该步在调用引擎前执行，写出的是"计划/意图记录"版。若同 `<slug>` 下该文件已存在（如先前 Brief 阶段写过完整报告），第 9 步须**合并/追加而非整体覆盖**（两阶段防覆盖）。
@@ -729,7 +731,7 @@ Clean two-column layout. Product occupies 35%. Whitespace 48%+.
 3. 主图默认 `1:1`；详情页图片默认 `2:3`，适合移动端纵向浏览。
 4. 每张图使用独立 Prompt 文件，避免一次 Prompt 生成多屏拼图。
 5. 每张独立 Prompt 必须以同一段 Campaign Style Lock 开头。
-6. 输出目录统一为 `<CWD>/output/ecom-details-image/<slug>/`（`<slug>` 为产品短名，中英文均可）；目录与通道前缀约定见上方「落盘与命名统一约定」与「#### 8. 输出文件命名与落盘」。例如 `<CWD>/output/ecom-details-image/laundry-detergent-pods-pdp/`。
+6. 输出目录统一为 `<CWD>/output/ecom-details-image/<slug>/`（`<slug>` 为产品短名，默认用中文，英文也接受）；目录与通道前缀约定见上方「落盘与命名统一约定」与「#### 8. 输出文件命名与落盘」。例如 `<CWD>/output/ecom-details-image/洗衣凝珠详情页/`。
 7. 如果模型不支持某个比例，改用最接近的支持比例，并在结果中说明。
 8. 如果 apiz CLI 不可用（未安装/未登录）且不在 Codex 环境，只输出完整 Prompt 包，不调用脚本。
 9. 不要虚构认证、实验数据、评分、销量、真实评价或品牌授权。
