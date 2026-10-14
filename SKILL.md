@@ -1,6 +1,6 @@
 ---
 name: ecom-details-image
-description: Create visual concepts, image-generation prompts, and optional AI-generated images for product hero images, marketing creatives, social posts, ads, ecommerce PDP visuals, and general visual design tasks. Use when the user asks for visual strategy, image prompt writing, product/marketing image direction, or direct text-to-image generation. In Codex environments use the built-in imagegen tool; elsewhere use the bundled script backed by the apiz CLI.
+description: Create visual concepts, image-generation prompts, and optional AI-generated images for product hero images, marketing creatives, social posts, ads, ecommerce PDP visuals, and general visual design tasks. Use when the user asks for visual strategy, image prompt writing, product/marketing image direction, or direct text-to-image generation. In Codex environments use the built-in imagegen tool; elsewhere use the bundled script backed by the apiz CLI. Also triggers when the user explicitly names a domestic engine — "用 Qwen / 即梦 / 可灵 出图" — or provides a local reference product photo for background swap / faithful editing / variation (通道 C 国内三引擎).
 ---
 
 # ecom-details-image Skill
@@ -10,15 +10,29 @@ description: Create visual concepts, image-generation prompts, and optional AI-g
 这个 Skill 有两种模式：
 
 1. **Brief / Prompt 模式**：只输出视觉简报和可执行图片 Prompt。
-2. **Generate 模式**：当用户明确要求“生图、生成图片、出图、render image”时，先输出最终 Prompt，再按下方**生图通道判断**选择生成方式。
+2. **Generate 模式**：当用户明确要求“生图、生成图片、出图、render image”，或点名“用 Qwen / 即梦 / 可灵 出图”，或提供本地参考产品图做换背景/保真编辑/变体时，先输出最终 Prompt，再按下方**生图通道判断（引擎选择总表）**选择生成方式。
 
 不要暴露、索要、写入、提交或回显真实 API key。使用者必须通过自己的环境变量配置 API。
 
 ---
 
-## 生图通道判断（Generate 模式必读）
+## 生图通道判断（Generate 模式必读 · 引擎选择总表）
 
 直接生图前必须先判断当前运行环境，选择对应通道：
+
+### 引擎选择总表
+
+| 通道 | 引擎 | 何时选用 | 默认 / 回退 |
+|---|---|---|---|
+| **A** | Codex 内置 `imagegen` | 当前 agent 会话具备内置 `imagegen` 工具 | 仅 Codex 环境可用 |
+| **B** | apiz CLI（GPT-Image-2.5） | 非 Codex 环境、未点名引擎、无参考图时的**默认通道** | 默认引擎；A 不可用时回退到 B |
+| **C** | 国内三引擎：ComfyUI/Qwen、即梦（dreamina）、可灵（kling） | ① 用户**点名**「用 Qwen / 即梦 / 可灵」；② 用户提供了**本地参考产品图**（换背景 / 保真编辑 / 变体） | 非默认、按需启用；C 内若点名引擎不可用按 Qwen→即梦→可灵→apiz→imagegen 回退并提示 |
+
+**默认策略（策略甲）**：用户仅说「生成 / 出图」、未点名引擎且未提供参考图 → 走通道 B（apiz，现状不变，零影响）。通道 C 仅在「点名」或「参考图」两种场景启用，启用后引擎一旦锁定，本次任务不可混用其他引擎。
+
+> 通道 A、B 的英文 Prompt + GPT-Image-2 铁律体系保持不变，不受通道 C 影响。通道 C 的 t2i（无参考图）沿用同一套英文铁律；i2i（有参考图）改用中文 Prompt（见下方通道 C 专节）。
+
+> **落盘与命名统一约定（A/B/C 通用）**：全部通道产物统一落 `<CWD>/output/ecom-details-image/<slug>/`（`<slug>` 为产品英文短名；`<CWD>` 为 agent 调用时的**当前工作目录**）。文件名加通道前缀：A=`IMG-`、B=`GPT-`、C=`CF-`(Qwen)/`JM-`(即梦)/`KL-`(可灵)。注意 `<CWD>` **不保证等于项目根**（agent 可能从子目录启动）；在其它工作区调用本 skill 时 `<CWD>` 指向该调用方工作区。若需把产物钉死在特定根目录，用 `--output-dir` 传入绝对路径覆盖默认落盘。
 
 ### 通道 A：Codex 环境 → agent 内置 imagegen
 
@@ -29,7 +43,7 @@ description: Create visual concepts, image-generation prompts, and optional AI-g
 1. 不要调用 `scripts/generate_image.py`，直接调用内置 `imagegen` 工具。
 2. 把最终 Prompt（含 Campaign Style Lock）作为 `prompt` 传入；工具如支持比例/尺寸参数，传入对应比例。
 3. 如果用户提供了参考产品图，按 imagegen 工具的参考图/编辑参数传入。
-4. 把返回的图片文件记录为 Generated Files；建议将文件移动或复制到 `generated-images/<产品slug>/` 目录，与本 Skill 的输出习惯保持一致。
+4. 把返回的图片文件记录为 Generated Files；生成后**重命名/移动**到 `<CWD>/output/ecom-details-image/<slug>/IMG-<基名>.png`（前缀 `IMG-` 表示通道 A），与本 Skill 的输出习惯保持一致。
 5. imagegen 不可用或调用失败时，回退到通道 B。
 
 ### 通道 B：非 Codex 环境 → apiz CLI 脚本
@@ -67,6 +81,137 @@ python3 scripts/generate_image.py --env-file .env --prompt-file prompt.txt
 **注意**：生图会消耗 apiz 账户积分（`apiz account balance` 查看）。批量出图前先把 Image Pack Plan 报给用户确认。
 
 如果 apiz CLI 未安装或未登录，不要阻塞：返回完整 Prompt 包，并给出安装/登录指引（`apiz auth login`），方便用户稍后自行运行。
+
+---
+
+### 通道 C：国内三引擎（Qwen / 即梦 / 可灵）
+
+> **启用条件（策略甲）**：仅在① 用户**点名**「用 Qwen / 即梦 / 可灵」，或② 用户提供了**本地参考产品图**（换背景 / 保真编辑 / 变体）时启用。未点名且无参考图时仍走默认通道 B（apiz）。
+> **单引擎锁定红线**：通道 C 一旦选定某个引擎，本次任务不得混用其他引擎（含不得中途切回 apiz/imagegen 出同一批图）。
+> **底线纪律**：提交前必须先把「机器情况 + 完整 Prompt（或改写后 Prompt）+ 参数 + 比例 + 质量档 + 种子」摆给用户审核，等用户明确说「提交」再真正跑（国内引擎要么扣云端额度、要么吃本地算力，禁止未确认就消耗）。
+
+#### 1. 底层依赖可用性自检（入口必做）
+
+进入通道 C 前，先核对三个底层依赖是否可用，缺失则按表回退/提示，避免硬失败：
+
+| 依赖 | 检查方式 | 缺失时的处理 |
+|---|---|---|
+| `comfy-image-qwen21`（含 `run_qwen21.py` / `check_comfy_stats.py`） | 确认 skill 可用；Qwen 走文生图/图生图前先跑 `check_comfy_stats.py` 看机器空闲 | 不可用 → 提示用户，Qwen 任务回退到即梦（仍不可用则可灵 → apiz） |
+| `qwen-image-2-1-prompter`（Qwen r2i 改写用） | 确认 skill 在环境/兄弟项目 `AI视觉创作专家` 中可达 | 缺失 → Qwen 的 i2i 改写不可用，提示用户，建议改用即梦/可灵 i2i 或回退 apiz |
+| `dreamina` CLI | `dreamina --version` 可执行且已登录 | 不可用 → 提示用户，回退到可灵（仍不可用则 apiz） |
+| `kling` CLI | `kling --version` 可执行且已登录 | 不可用 → 提示用户，回退到即梦（仍不可用则 apiz） |
+
+> 点名的引擎不可用时，按 **Qwen → 即梦 → 可灵 → apiz → imagegen** 顺序自动回退，并在返回中明确告知用户实际用了哪个引擎、为何回退。
+
+#### 2. 引擎差异速查
+
+| 维度 | ComfyUI/Qwen（本地） | 即梦 dreamina（云端） | 可灵 kling（云端） |
+|---|---|---|---|
+| 命令入口 | `run_qwen21.py`（CLI 模式） | `dreamina` | `kling` |
+| 多参考图语法 | `--image` 单图（r2i 模板）；多图以工作流支持为准 | `--images "a.jpg" "b.jpg"`（空格分隔） | `--image "a.jpg"`（单图为主，以 `-h` 为准） |
+| Prompt 位置 | `--prompt "<文本>"` | `--prompt "<文本>"` | 位置参数 `"<中文 prompt>"`（置于命令末尾） |
+| 模型指定 | 工作流模板 `--workflow` + `--built-name` 隐式选模型 | `--model_version 5.0` | `--model <kling who_am_i 取值>` |
+| 比例参数 | `--aspect <下拉项>` | `--ratio <比例>` | `--aspectRatio <比例>` |
+| 异步返回 | 本地同步出图 | 提交后返回任务，按需轮询/下载 | 提交后返回任务，按需轮询/下载 |
+| 免费档 | 本机本地部署，免费（仅吃算力） | 需登录，按额度 | 需登录，按额度 |
+| 中文支持 | 走 Bash + `$(cat ...)` 读 UTF-8，禁用 PowerShell 直传 | 同上 | 同上 |
+
+#### 3. t2i / i2i 路由判定
+
+- **t2i（文生图，无参考图）**：用户未给本地参考产品图时，沿用现有**英文 Prompt + GPT-Image-2 铁律**（hex 色值、数字占比、显式留白、否定清单、平台预留空间）。三引擎 t2i 与通道 B 共用同一套英文铁律，不另起炉灶。
+- **i2i（图生图，有参考图）**：用户给了本地参考产品图（换背景 / 保真编辑 / 变体）时，改用**中文 Prompt**：
+  - **Qwen**：走 `r2i` 工作流，且**必须先用 `qwen-image-2-1-prompter`（r2i 模式、中文）改写为 `rewritten_prompt`**，禁止把模板/简报原文直接传给 Qwen。
+  - **即梦**：走 `dreamina image2image`，中文 Prompt 直传（见命令模板）。
+  - **可灵**：走 `kling image_to_image`，中文 Prompt 作为位置参数直传。
+
+#### 4. 命令模板（细节以各 CLI `-h` 为准）
+
+**Qwen（CLI 模式，本地）**
+
+```bash
+# 文生图 t2i
+python3 run_qwen21.py --workspace <项目根> --workflow <t2i 模板> \
+  --prompt "<英文 GPT-Image-2 铁律 Prompt>" --aspect <下拉项> \
+  --built-name <规范名> --image-name <成图基名> --outdir <目录>
+
+# 图生图 r2i（必须先经 prompter 改写出 rewritten_prompt）
+python3 run_qwen21.py --workspace <项目根> --workflow <r2i 模板> \
+  --prompt "$(cat rewritten_prompt.txt)" --aspect <下拉项> \
+  --image "E:/.../参考图.jpg" --built-name <规范名> --image-name <成图基名> \
+  --outdir <目录> --quality fine --seed <可选>
+
+# 可选参数：--megapixels --quality fine|draft --seed --host 192.168.1.6 --port 8188 --dry/--status
+```
+
+**即梦 dreamina（云端）**
+
+```bash
+# 图生图 i2i
+dreamina image2image --images "E:/.../源图.jpg" \
+  --prompt "$(cat prompt_zh.txt)" --ratio <比例> \
+  --resolution_type 2k --model_version 5.0
+
+# 文生图 t2i（走即梦对应文生图子命令，参数以 -h 为准）
+dreamina text2image --prompt "$(cat prompt_en.txt)" --ratio <比例> --resolution_type 2k --model_version 5.0
+```
+
+**可灵 kling（云端）**
+
+```bash
+# 图生图 i2i：模型名以 kling who_am_i 为准，禁止沿用即梦参数名
+kling image_to_image --model <kling who_am_i 取值> \
+  --image "E:/.../源图.jpg" --aspectRatio <比例> --imgResolution 2k \
+  "$(cat prompt_zh.txt)"
+```
+
+> ⚠️ **kling 参数勿猜**：`--model` 的取值必须先 `kling who_am_i` 取真实模型名；比例用 `--aspectRatio`（不是 `--ratio`）、分辨率用 `--imgResolution`（不是 `--resolution_type`）。禁止把即梦的 `--ratio / --resolution_type / --model_version` 直接套到 kling。
+
+#### 5. Prompt 语言分流规则
+
+- t2i（三引擎通用）：**英文**，与现有 GPT-Image-2 铁律完全一致。
+- i2i（三引擎通用）：**中文**。
+- Qwen r2i：**必须经 `qwen-image-2-1-prompter` 改写成 `rewritten_prompt`**，再把改写结果传给 Qwen；不许传模板原文。
+- 通道 B（apiz / GPT-Image-2.5）英文体系**不变**，不受本规则影响。
+
+#### 6. 机器检测步骤（Qwen 必做）
+
+Qwen 是本地 ComfyUI 算力，提交前必须先检测机器是否空闲，避免排队或 OOM：
+
+```bash
+python3 check_comfy_stats.py          # 看 GPU/队列空闲情况
+# 或 run_qwen21.py --status / --dry     # 预检工作流与参数，不真正出图
+```
+
+机器繁忙 / 不可用 → 提示用户，Qwen 任务按回退链转即梦 → 可灵 → apiz。
+
+#### 7. 中文编码铁律
+
+调用即梦 / 可灵 / Qwen 时，一律遵循以下编码规则，避免中文乱码：
+
+- **走 Bash + `$(cat ...)` 读 UTF-8 文件**传中文 Prompt（把中文写进 `*.txt` 再 `$(cat 文件)`），不要直接把长中文塞进命令行引号。
+- **路径用 Windows 原生 `E:/...`**，禁用 Git Bash 的 `/e/...` 写法。
+- **禁用 PowerShell 传中文**（GBK 乱码）；统一用 Bash / 终端执行。
+
+#### 8. 输出文件命名与落盘（A/B/C 统一）
+
+全部通道产物统一落 `<CWD>/output/ecom-details-image/<slug>/`（见上方「落盘与命名统一约定」）：
+
+- 通道 A（imagegen）：`IMG-<基名>.png`
+- 通道 B（apiz / GPT-Image-2.5）：`GPT-<基名>.png`
+- 通道 C：Qwen `CF-<基名>.png`、即梦 `JM-<基名>.png`、可灵 `KL-<基名>.png`
+
+**A/B 前缀落地（重命名/移动）**：imagegen / apiz 脚本本身不直接出前缀，先按工具原名出图，再由 skill 流程 `mv` 重命名/移动到带前缀文件名（如 `IMG-<原名>.png` / `GPT-<原名>.png`）。通道 C 的 Qwen 仍用 `--image-name <成图基名>` + `CF-` 前缀规则，其命令模板里的 `--outdir` 即填 `<CWD>/output/ecom-details-image/<slug>/`。
+
+#### 9. 提交前审核清单（红线）
+
+真正调用引擎前，先把以下信息摆给用户，等用户明确说「**提交**」再执行：
+
+- [ ] 选用引擎与是否点名/回退（含回退原因）
+- [ ] 机器情况（Qwen 的 `check_comfy_stats.py` 结果）
+- [ ] 完整 Prompt（或 Qwen r2i 的 `rewritten_prompt`）
+- [ ] 参数：比例 / 质量档（fine|draft）/ 种子 / 参考图路径
+- [ ] 预计消耗（本地算力 或 云端额度）
+- [ ] 输出文件名与落盘目录
 
 ---
 
@@ -539,7 +684,7 @@ Clean two-column layout. Product occupies 35%. Whitespace 48%+.
 3. 主图默认 `1:1`；详情页图片默认 `2:3`，适合移动端纵向浏览。
 4. 每张图使用独立 Prompt 文件，避免一次 Prompt 生成多屏拼图。
 5. 每张独立 Prompt 必须以同一段 Campaign Style Lock 开头。
-6. 输出目录用产品英文 slug，例如 `generated-images/laundry-detergent-pods-pdp/`。
+6. 输出目录统一为 `<CWD>/output/ecom-details-image/<slug>/`（相对 agent 当前工作目录，`<slug>` 为产品英文短名），例如 `<CWD>/output/ecom-details-image/laundry-detergent-pods-pdp/`。
 7. 如果模型不支持某个比例，改用最接近的支持比例，并在结果中说明。
 8. 如果 apiz CLI 不可用（未安装/未登录）且不在 Codex 环境，只输出完整 Prompt 包，不调用脚本。
 9. 不要虚构认证、实验数据、评分、销量、真实评价或品牌授权。
@@ -551,12 +696,16 @@ Clean two-column layout. Product occupies 35%. Whitespace 48%+.
 当用户要求生成图片：
 
 1. 先输出最终 Prompt。
-2. 按**生图通道判断**选择通道：Codex 环境直接调用内置 imagegen；其他环境运行 `scripts/generate_image.py`（内部走 apiz CLI）。
-3. 短 Prompt 用 `--prompt`，长 Prompt 用 `--prompt-file`。
-4. 根据平台选择 `--size`（比例格式），没有要求时默认 `1:1`。
-5. 只有用户指定目录时才使用 `--output-dir`，否则使用 `generated-images/`。
-6. 如果 apiz CLI 未安装或未登录，不要调用脚本；返回 Prompt 和 `apiz auth login` 指引。
-7. 批量出图前先报 Image Pack Plan 和预计积分消耗，经用户确认再执行。
+2. 按**生图通道判断（引擎选择总表）**选通道：
+   - 用户**点名** Qwen / 即梦 / 可灵，或提供了**本地参考产品图**（换背景 / 保真编辑 / 变体）→ 走**通道 C**（国内三引擎，见上方专节）。
+   - Codex 环境且未点名、无参考图 → 通道 A（内置 imagegen）。
+   - 其他环境、未点名且无参考图 → **默认通道 B**（apiz，现状不变，零影响）。
+3. **通道 C 提交红线**：真正调用引擎前，必须把「引擎与回退原因、机器情况（Qwen）、完整 Prompt 或改写后 `rewritten_prompt`、参数、比例、质量档、种子、预计消耗」摆给用户审核，等用户明确说「**提交**」再执行。
+4. 短 Prompt 用 `--prompt`，长 Prompt 用 `--prompt-file`；通道 C 中文 Prompt 一律走 `$(cat ...)` 读 UTF-8 文件（见通道 C 编码铁律），禁用 PowerShell 直传中文。
+5. 根据平台选比例（通道 B 用 `--size`；通道 C 用各引擎比例参数 `--aspect` / `--ratio` / `--aspectRatio`），没有要求时默认 `1:1`。
+6. 输出目录统一为 `<CWD>/output/ecom-details-image/<slug>/`（`<CWD>` 为 agent 当前工作目录；`<slug>` 为产品英文短名）；**文件名必须加通道前缀**：A=`IMG-`、B=`GPT-`、C=`CF-`(Qwen)/`JM-`(即梦)/`KL-`(可灵)。通道 A/B 靠生成后重命名/移动加前缀；通道 C 的 Qwen 用 `--image-name` 基名 + `CF-`。
+7. 如果 apiz CLI 未安装或未登录（且非 Codex、未命中通道 C），不要调用脚本；返回 Prompt 和 `apiz auth login` 指引。
+8. 批量出图前先报 Image Pack Plan 和预计消耗（apiz 积分 / 本地算力 / 云端额度），经用户确认再执行。
 
 命令形状（非 Codex 环境）：
 
@@ -588,14 +737,25 @@ python3 scripts/generate_image.py --prompt "..." --size 1:1
 - 证据缺失时不虚构效果、认证或数据。
 - 图片内文字短且必要。
 - UGC / 直播 / 社媒场景已应用 anti-AI 技巧（模板中的 `anti_ai_tips` 字段）。
-- 已按**生图通道判断**选择通道：Codex 环境用内置 imagegen，其他环境用 `scripts/generate_image.py`（apiz CLI）。
-- 如有用户参考图片，Codex 通道已传给 imagegen，脚本通道已传入 `--image` / `--image-url` 参数。
+- 已按**生图通道判断（引擎选择总表）**选择通道：默认通道 B（apiz）；点名 Qwen/即梦/可灵 或 有参考图 → 通道 C；Codex 环境 → 通道 A。未点名且无参考图时未误切到通道 C。
+- 如有用户参考图片：通道 A 传给 imagegen；通道 B 传入 `--image` / `--image-url`；通道 C i2i 已按对应引擎传参考图（Qwen `--image`、即梦 `--images`、可灵 `--image`）。
 - 负面约束覆盖常见失败点。
 - 输出和文件里没有 API key 或私密凭据。
-- 已应用 GPT-Image-2 铁律：hex 颜色、数字占比、显式留白、否定清单、平台预留空间。
+- 已应用 GPT-Image-2 铁律：hex 颜色、数字占比、显式留白、否定清单、平台预留空间（通道 B / 通道 C t2i 通用）。
 - 多图任务已分配不同角度和景别，无连续 3 张相同角度，全景图占比 ≤ 40%。
 - **详情页图片必须是电商信息图格式**（含标题、图标、标签、利益点、步骤或信任徽章），不是单纯的多角度产品照片。每张详情页 Prompt 以 `E-commerce infographic` 开头。
 - 出图后提醒用户放大 200% 逐字核对中文笔画。
+
+**通道 C（国内三引擎）专属 QA：**
+
+- **单引擎锁定**：本次任务只用了被点名/选定的那一个引擎，没有混用其他引擎（含没中途切回 apiz/imagegen 出同一批图）。
+- **依赖可用性自检**：进入通道 C 前已核对 Qwen / prompter / dreamina / kling 四个依赖是否可用；缺失时按回退链转接并已在返回中说明。
+- **Qwen r2i 必过 prompter**：Qwen 图生图已先用 `qwen-image-2-1-prompter` 改写成 `rewritten_prompt`，没有把模板原文直接传给 Qwen。
+- **Qwen 机器检测**：Qwen 提交前已跑 `check_comfy_stats.py`（或 `--status`/`--dry`）确认机器空闲，未盲目消耗本地算力。
+- **中文编码铁律**：即梦/可灵/Qwen 的中文 Prompt 走 Bash + `$(cat ...)` 读 UTF-8；路径用 `E:/...`；未用 PowerShell 直传中文。
+- **kling 参数未猜**：kling 用了 `kling who_am_i` 取真实模型名，比例用 `--aspectRatio`、分辨率用 `--imgResolution`，未沿用即梦的 `--ratio` / `--resolution_type` / `--model_version`。
+- **提交前审核**：已把「引擎+回退原因、机器情况、完整 Prompt/改写后 Prompt、参数、比例、质量档、种子、预计消耗」摆给用户，等「提交」才真正调用。
+- **引擎前缀命名**：全部产物已加通道前缀（A=`IMG-`、B=`GPT-`、C=`CF-`/`JM-`/`KL-`）并落 `<CWD>/output/ecom-details-image/<slug>/`；A/B 已通过生成后重命名/移动加前缀。
 
 ---
 
@@ -613,6 +773,15 @@ python3 scripts/generate_image.py --prompt "..." --size 1:1
 | 全套图角度雷同 | AI 默认生成正面 3/4 角度，不指定就千篇一律 | 每张 Prompt 显式写明角度关键词；主图 ≥3 种角度，详情页 ≥4 种，穿插特写/微距 |
 | 衣服/3C 翻车率高 | 对面料垂坠感、人体比例、接口按键细节要求太高 | 优先测护肤品、家居、食品等稳定品类；衣服用参考图 `--image` 提升一致性 |
 | 详情页变成纯产品图 | 只写了多角度关键词，没有电商信息图结构（标题、图标、标签、卖点列表） | 每张详情页 Prompt 以 `E-commerce infographic` 开头，包含布局、文案、图标等电商元素；多角度是信息图内的展示手段而非目的 |
+| 通道 C 误当默认 | 未点名引擎、无参考图时也切到 Qwen/即梦/可灵，破坏原 apiz 默认行为 | 严格按策略甲：仅点名或参考图才走通道 C；纯「生成/出图」仍走默认通道 B |
+| 单任务混用引擎 | 同一批图既用 Qwen 又用即梦/可灵，风格与一致性失控 | 锁定单引擎红线：本次任务只用被选定那一个引擎 |
+| Qwen r2i 漏改写 | 把模板原文直接丢给 Qwen，保真/换背景效果差 | i2i 必须先经 `qwen-image-2-1-prompter`（r2i 模式）改写出 `rewritten_prompt` |
+| Qwen 盲跑吃算力 | 不查机器直接提交，排队/OOM 或白烧本地算力 | 提交前 `check_comfy_stats.py`（或 `--status`/`--dry`）确认空闲 |
+| 中文乱码 | PowerShell 直传中文或 Git Bash `/e/` 路径，GBK 乱码 | 走 Bash + `$(cat ...)` 读 UTF-8；路径用 `E:/...`；禁用 PowerShell 传中文 |
+| kling 参数套即梦 | 把 `--ratio` / `--resolution_type` / `--model_version` 直接用到 kling | kling 用 `--aspectRatio` / `--imgResolution`，`--model` 以 `kling who_am_i` 取值，禁止沿用即梦参数名 |
+| 未审核就扣额度 | 没确认就调用云端引擎，浪费积分/算力 | 提交前把引擎、机器情况、Prompt、参数、比例、质量档、种子、预计消耗摆给用户，等「提交」再跑 |
+| 产物无引擎前缀 | 三通道出图混在一起难分辨 | 文件名加通道前缀 A=`IMG-`/B=`GPT-`/C=`CF-`(Qwen)/`JM-`(即梦)/`KL-`(可灵)，落 `<CWD>/output/ecom-details-image/<slug>/` |
+| 依赖缺失硬失败 | 没装/没登录 dreamina/kling 或 prompter 不可达，直接报错 | 入口先做依赖可用性自检，缺失按 Qwen→即梦→可灵→apiz→imagegen 回退并提示 |
 
 ---
 
@@ -638,8 +807,9 @@ Brief / Prompt 模式返回：
 Generate 模式返回：
 
 1. **匹配模板**：使用的模板文件名和场景类型
-2. **Final Image Prompt**
-3. **Campaign Style Lock**，多图任务必须返回
-4. **Image Pack Plan**，包含每张图的编号、用途、尺寸、对应模板和短文案
-5. **Generated Files**
-6. **Assumptions / Notes**
+2. **选用通道 / 引擎**：说明走 A（imagegen）/ B（apiz，默认）/ 还是 C（Qwen / 即梦 / 可灵）；点名命中还是回退，以及回退原因
+3. **Final Image Prompt**（通道 C i2i 返回 `rewritten_prompt` 改写结果）
+4. **Campaign Style Lock**，多图任务必须返回
+5. **Image Pack Plan**，包含每张图的编号、用途、尺寸、对应模板和短文案
+6. **Generated Files**，全部产物须带通道前缀（A=`IMG-`、B=`GPT-`、C=`CF-`/`JM-`/`KL-`）并落 `<CWD>/output/ecom-details-image/<slug>/`
+7. **Assumptions / Notes**（含额度/算力消耗说明、依赖缺失提示）
