@@ -9,7 +9,7 @@ description: Create visual concepts, image-generation prompts, and optional AI-g
 
 这个 Skill 有两种模式：
 
-1. **Brief / Prompt 模式**：只输出视觉简报和可执行图片 Prompt。
+1. **Brief/Prompt 模式**：只输出视觉简报和可执行图片 Prompt。
 2. **Generate 模式**：当用户明确要求“生图、生成图片、出图、render image”，或点名“用 Qwen / 即梦 / 可灵 出图”，或提供本地参考产品图做换背景/保真编辑/变体时，先输出最终 Prompt，再按下方**生图通道判断（引擎选择总表）**选择生成方式。
 
 不要暴露、索要、写入、提交或回显真实 API key。使用者必须通过自己的环境变量配置 API。
@@ -32,12 +32,12 @@ description: Create visual concepts, image-generation prompts, and optional AI-g
 
 > 通道 A、B 的英文 Prompt + GPT-Image-2 铁律体系保持不变，不受通道 C 影响。通道 C 的 t2i（无参考图）沿用同一套英文铁律；i2i（有参考图）改用中文 Prompt（见下方通道 C 专节）。
 
-> **落盘与命名统一约定（A/B/C 通用）**：全部通道产物统一落 `<CWD>/output/ecom-details-image/<slug>/`（`<slug>` 为产品英文短名；`<CWD>` 为 agent 调用时的**当前工作目录**）。文件名加通道前缀：A=`IMG-`、B=`GPT-`、C=`CF-`(Qwen)/`JM-`(即梦)/`KL-`(可灵)。注意 `<CWD>` **不保证等于项目根**（agent 可能从子目录启动）；在其它工作区调用本 skill 时 `<CWD>` 指向该调用方工作区。若需把产物钉死在特定根目录，用 `--output-dir` 传入绝对路径覆盖默认落盘。
+> **落盘与命名统一约定（A/B/C 通用）**：全部通道产物统一落 `<CWD>/output/ecom-details-image/<slug>/`（`<slug>` 为产品短名（中英文均可）；`<CWD>` 为 agent 调用时的**当前工作目录**）。文件名加通道前缀：A=`IMG-`、B=`GPT-`、C=`CF-`(Qwen)/`JM-`(即梦)/`KL-`(可灵)。注意 `<CWD>` **不保证等于项目根**（agent 可能从子目录启动）；在其它工作区调用本 skill 时 `<CWD>` 指向该调用方工作区。若需把产物钉死在特定根目录，用 `--output-dir` 传入绝对路径覆盖默认落盘。
 
-> **提示词与报告落盘（A/B/C + Brief/Prompt 模式通用，增量约定）**：除图片产物外，还须把"提示词/报告"一并存档，便于复现与审计：
-> - **Generate 模式（A/B/C 全部）**：每张生成图在同目录写**同名旁挂文件** `<前缀>-<基名>.prompt.txt`（如 `GPT-001.png` ↔ `GPT-001.prompt.txt`），1:1 对应，内容格式见下方「输出文件命名与落盘」节的旁挂规范。通道 C 的中文 Prompt 已写 `*.txt` 经 `$(cat ...)` 读给 CLI，生成后**直接把该 txt 重命名/归档**为旁挂文件（Qwen 用改写后的 `rewritten_prompt`）；通道 A/B 由 agent 在生成后自行写出。
-> - **Brief/Prompt 模式（不出图）**：把完整生成报告（匹配模板、Visual Brief、Final Prompt、Negative Constraints、Campaign Style Lock、Hero/PDP 序列、Copy Lines、Assumptions 等）保存为 `<CWD>/output/ecom-details-image/<slug>/brief_prompt.md`。
-> - 落盘为生成/输出后的动作，**写盘失败只告警，不阻断已生成图片或报告的返回**。
+> **提示词与报告落盘（A/B/C + 两模式通用，增量约定）**：除图片产物外，还须把"提示词/报告"一并存档，便于复现与审计。归档动作统一集成在「核心流程」中，不按模式分叉：
+> - **`brief_prompt-<slug>.md`（由核心流程第 9 步「提示词备忘录归档」统一产出）**：汇总报告文件，落 `<CWD>/output/ecom-details-image/<slug>/brief_prompt-<slug>.md`。**Brief/Prompt 与 Generate 两种模式都执行核心流程第 9 步，故天然都落盘**，无需分叉强调；对 Generate 而言，因该步在调用引擎前执行，写出的是"计划/意图记录"版。若同 `<slug>` 下该文件已存在（如先前 Brief 阶段写过完整报告），第 9 步须**合并/追加而非整体覆盖**（两阶段防覆盖）。
+> - **Generate 模式（A/B/C 全部）旁挂文件（仅 Generate，因只有生成图才有旁挂）**：每张生成图在同目录写**同名旁挂文件** `<前缀>-<基名>.prompt.txt`（如 `GPT-001.png` ↔ `GPT-001.prompt.txt`），1:1 对应，内容格式见下方「输出文件命名与落盘」节的旁挂规范。通道 C 的中文 Prompt 已写 `*.txt` 经 `$(cat ...)` 读给 CLI，生成后**直接把该 txt 重命名/归档**为旁挂文件（Qwen 用改写后的 `rewritten_prompt`）；通道 A/B 由 agent 在生成后自行写出。
+> - 落盘为生成/输出后的动作（核心流程第 9 步的 `brief_prompt-<slug>.md` 须在**调用引擎前**写出），**写盘失败只告警，不阻断已生成图片或报告的返回**。
 
 ### 通道 A：Codex 环境 → agent 内置 imagegen
 
@@ -240,7 +240,7 @@ python3 check_comfy_stats.py          # 看 GPU/队列空闲情况
 - 旁挂文件与图片产物同目录、同前缀、同基名，落盘失败只告警，不影响图片返回。
 - 完整可对照示例见 `references/example-brief_prompt.md`（Brief 报告）与 `references/example-GPT-001.prompt.txt`（旁挂文件）。
 
-#### 9. 提交前审核清单（红线）
+#### 通道 C 提交前审核清单（红线）
 
 真正调用引擎前，先把以下信息摆给用户，等用户明确说「**提交**」再执行：
 
@@ -263,11 +263,14 @@ python3 check_comfy_stats.py          # 看 GPU/队列空闲情况
 6. 写出可执行图片 Prompt（**保持简洁**，见下方 Prompt 精简原则）；多图任务必须把同一段 Campaign Style Lock 原样放进每张 Prompt。
 7. 如果任务是商品图、详情页图或营销图，先做转化驱动力诊断。
 8. 如果用户要求电商详情页、PDP、主图堆栈或整套商品图，默认输出 **5 张主图 + 7-9 张详情页图片** 的图片包。
-9. 如果用户要求直接出图，按**生图通道判断**执行：Codex 环境用内置 imagegen；其他环境调用 `scripts/generate_image.py`（apiz CLI）。用户提供了参考产品图时，Codex 传给 imagegen，脚本通道传 `--image`。
-10. 返回 Prompt、生成文件路径和关键假设。
-11. **落盘归档（必做）**：
-    - **Brief/Prompt 模式（不出图）**：把本次完整生成报告写入 `<CWD>/output/ecom-details-image/<slug>/brief_prompt.md`（内容见下方「输出格式 · Brief/Prompt 模式返回」）。
-    - **Generate 模式（A/B/C）**：每张生成图在同目录写出同名旁挂 `<前缀>-<基名>.prompt.txt`（内容见「旁挂提示词文件规范」）。写盘失败只告警，不阻断返回。
+9. **提示词备忘录归档（必做）**：把已完成的 Brief/Prompt（匹配模板、Visual Brief、Final Prompt、Negative Constraints、Campaign Style Lock、Image Pack Plan、转化驱动力诊断、Copy Lines、Assumptions）写入 `<CWD>/output/ecom-details-image/<slug>/brief_prompt-<slug>.md`。
+    - **本步两模式都执行**，不按 Brief/Prompt 或 Generate 分叉。
+    - **Generate 模式**：因本步在调用引擎之前执行，写出的是"计划/意图记录"版；调引擎后各图实际种子/时间戳只写进同名旁挂 `<前缀>-<基名>.prompt.txt`，不回填本文件。
+    - **两阶段防覆盖**：若同 `<slug>` 下 `brief_prompt-<slug>.md` 已存在（如先前 Brief 阶段写过完整报告），应**合并/追加而非整体覆盖**，以免丢失已有内容。
+    - 写盘失败只告警，不阻断返回。
+10. 如果用户要求直接出图，按上方**「生图通道判断（引擎选择总表）」**选通道：Codex 环境 → **通道 A**（内置 `imagegen`）；非 Codex 且未点名引擎、无参考图 → 默认**通道 B**（apiz，脚本 `scripts/generate_image.py`）；用户**点名 Qwen / 即梦 / 可灵**或**提供本地参考产品图** → **通道 C**（国内三引擎，见上方专节）。用户提供参考产品图时：通道 A 传给 `imagegen`，通道 B 传 `--image` / `--image-url`，通道 C 按对应引擎传参考图（Qwen `--image`、即梦 `--images`、可灵 `--image`）。
+11. **Generate 旁挂归档（仅 Generate 模式）**：每张生成图在同目录写出同名旁挂 `<前缀>-<基名>.prompt.txt`（内容见「旁挂提示词文件规范」）。仅 Generate 模式需要（只有生成图才有旁挂）。写盘失败只告警，不阻断返回。
+12. 返回 Prompt、生成文件路径和关键假设。
 
 ---
 
@@ -430,6 +433,7 @@ Prompt 要足够具体，可以直接执行；也不要过度规定无关细节�
 3. 用户指定风格变体 → 应用 `variants.<name>.overrides`。
 4. 已知产品品类 → 应用 `category_tips.<category>`。
 5. 简化：只保留有值的字段，输出简洁的自然语言 Prompt。
+6. 模板的 `examples` 字段为可选参考样例，可据以校准语气与结构；`anti_ai_tips` 见下方「Anti-AI 技巧」节，生成 UGC / 直播 / 社媒对应场景时必须遵循。
 
 ### 风格变体速查
 
@@ -725,7 +729,7 @@ Clean two-column layout. Product occupies 35%. Whitespace 48%+.
 3. 主图默认 `1:1`；详情页图片默认 `2:3`，适合移动端纵向浏览。
 4. 每张图使用独立 Prompt 文件，避免一次 Prompt 生成多屏拼图。
 5. 每张独立 Prompt 必须以同一段 Campaign Style Lock 开头。
-6. 输出目录统一为 `<CWD>/output/ecom-details-image/<slug>/`（相对 agent 当前工作目录，`<slug>` 为产品英文短名），例如 `<CWD>/output/ecom-details-image/laundry-detergent-pods-pdp/`。
+6. 输出目录统一为 `<CWD>/output/ecom-details-image/<slug>/`（`<slug>` 为产品短名，中英文均可）；目录与通道前缀约定见上方「落盘与命名统一约定」与「#### 8. 输出文件命名与落盘」。例如 `<CWD>/output/ecom-details-image/laundry-detergent-pods-pdp/`。
 7. 如果模型不支持某个比例，改用最接近的支持比例，并在结果中说明。
 8. 如果 apiz CLI 不可用（未安装/未登录）且不在 Codex 环境，只输出完整 Prompt 包，不调用脚本。
 9. 不要虚构认证、实验数据、评分、销量、真实评价或品牌授权。
@@ -744,7 +748,7 @@ Clean two-column layout. Product occupies 35%. Whitespace 48%+.
 3. **通道 C 提交红线**：真正调用引擎前，必须把「引擎与回退原因、机器情况（Qwen）、完整 Prompt 或改写后 `rewritten_prompt`、参数、比例、质量档、种子、预计消耗」摆给用户审核，等用户明确说「**提交**」再执行。
 4. 短 Prompt 用 `--prompt`，长 Prompt 用 `--prompt-file`；通道 C 中文 Prompt 一律走 `$(cat ...)` 读 UTF-8 文件（见通道 C 编码铁律），禁用 PowerShell 直传中文。
 5. 根据平台选比例（通道 B 用 `--size`；通道 C 用各引擎比例参数 `--aspect` / `--ratio` / `--aspectRatio`），没有要求时默认 `1:1`。
-6. 输出目录统一为 `<CWD>/output/ecom-details-image/<slug>/`（`<CWD>` 为 agent 当前工作目录；`<slug>` 为产品英文短名）；**文件名必须加通道前缀**：A=`IMG-`、B=`GPT-`、C=`CF-`(Qwen)/`JM-`(即梦)/`KL-`(可灵)。通道 A/B 靠生成后重命名/移动加前缀；通道 C 的 Qwen 用 `--image-name` 基名 + `CF-`。
+6. 输出目录统一为 `<CWD>/output/ecom-details-image/<slug>/`，文件名**必须加通道前缀**（A=`IMG-`、B=`GPT-`、C=`CF-`/`JM-`/`KL-`）；目录、前缀与 A/B 落地规则见上方「落盘与命名统一约定」与「#### 8. 输出文件命名与落盘」。
 7. 如果 apiz CLI 未安装或未登录（且非 Codex、未命中通道 C），不要调用脚本；返回 Prompt 和 `apiz auth login` 指引。
 8. 批量出图前先报 Image Pack Plan 和预计消耗（apiz 积分 / 本地算力 / 云端额度），经用户确认再执行。
 
@@ -786,7 +790,7 @@ python3 scripts/generate_image.py --prompt "..." --size 1:1
 - 多图任务已分配不同角度和景别，无连续 3 张相同角度，全景图占比 ≤ 40%。
 - **详情页图片必须是电商信息图格式**（含标题、图标、标签、利益点、步骤或信任徽章），不是单纯的多角度产品照片。每张详情页 Prompt 以 `E-commerce infographic` 开头。
 - 出图后提醒用户放大 200% 逐字核对中文笔画。
-- **提示词/报告已落盘**：Brief/Prompt 模式已写 `<slug>/brief_prompt.md`；Generate 模式每张图已写同名旁挂 `<前缀>-<基名>.prompt.txt`（含通道/模型/比例/质量档/种子/参考图/时间戳/审核标记 + Final Prompt + Negative Constraints），落盘失败已告警且未阻断返回。
+- **提示词/报告已落盘**：核心流程第 9 步（提示词备忘录归档）已统一写出 `<slug>/brief_prompt-<slug>.md`（两模式都执行该步；Generate 因在调引擎前执行故为计划/意图记录版）；Generate 模式每张图已写同名旁挂 `<前缀>-<基名>.prompt.txt`（含通道/模型/比例/质量档/种子/参考图/时间戳/审核标记 + Final Prompt + Negative Constraints），落盘失败已告警且未阻断返回。
 
 **通道 C（国内三引擎）专属 QA：**
 
@@ -825,37 +829,35 @@ python3 scripts/generate_image.py --prompt "..." --size 1:1
 | 未审核就扣额度 | 没确认就调用云端引擎，浪费积分/算力 | 提交前把引擎、机器情况、Prompt、参数、比例、质量档、种子、预计消耗摆给用户，等「提交」再跑 |
 | 产物无引擎前缀 | 三通道出图混在一起难分辨 | 文件名加通道前缀 A=`IMG-`/B=`GPT-`/C=`CF-`(Qwen)/`JM-`(即梦)/`KL-`(可灵)，落 `<CWD>/output/ecom-details-image/<slug>/` |
 | 依赖缺失硬失败 | 没装/没登录 dreamina/kling 或 prompter 不可达，直接报错 | 入口先做依赖可用性自检，缺失按 Qwen→即梦→可灵→apiz→imagegen 回退并提示 |
-| 提示词没存档 | 只出图不存 Prompt，事后无法复现/审计同一张图的参数 | 每次生成后写旁挂 `<前缀>-<基名>.prompt.txt`（通道/模型/比例/质量档/种子/参考图/时间戳/审核标记 + Final Prompt）；Brief/Prompt 模式写 `<slug>/brief_prompt.md` |
+| 提示词没存档 | 只出图不存 Prompt，事后无法复现/审计同一张图的参数 | 核心流程第 9 步（提示词备忘录归档）已统一写出 `<slug>/brief_prompt-<slug>.md`（两模式都执行该步）；Generate 每张图另写同名旁挂 `<前缀>-<基名>.prompt.txt`（通道/模型/比例/质量档/种子/参考图/时间戳/审核标记 + Final Prompt） |
 
 ---
 
 ## 输出格式
 
-Brief / Prompt 模式返回：
+Brief/Prompt 模式返回（下列字段即核心流程第 9 步「提示词备忘录归档」写入 `brief_prompt-<slug>.md` 的内容，二者必须一致；本模式执行到第 9 步即停，不调引擎）：
 
 1. **匹配模板**：使用的模板文件名和场景类型
 2. **Visual Brief**
-3. **Final Image Prompt**
+3. **Final Prompt**
 4. **Negative Constraints**
 5. **Assumptions**
 
-> **归档**：上述字段须同时写入 `<CWD>/output/ecom-details-image/<slug>/brief_prompt.md`（结构化 markdown），与「核心流程 · 第 11 步」一致。
-
 商品或营销任务追加：
 
-1. **Conversion Driver Diagnosis**
+1. **Conversion Driver Diagnosis**（转化驱动力诊断）
 2. **Campaign Style Lock**，当任务包含多张图片
-3. **Hero Image Sequence**（标注每张图对应的模板文件）
-4. **PDP Detail Image Sequence**，当请求涉及详情页、PDP 或整套商品图
-5. **Copy Lines**，如果图片需要文字
-6. **Test Priorities**
+3. **Image Pack Plan（图片包计划）**，含 Hero Image Sequence 与 PDP Detail Image Sequence（每张图标注对应模板文件）；当请求涉及详情页、PDP 或整套商品图时必填
+4. **Copy Lines**，如果图片需要文字
+5. **Test Priorities**（可选）
 
 Generate 模式返回：
 
 1. **匹配模板**：使用的模板文件名和场景类型
 2. **选用通道 / 引擎**：说明走 A（imagegen）/ B（apiz，默认）/ 还是 C（Qwen / 即梦 / 可灵）；点名命中还是回退，以及回退原因
-3. **Final Image Prompt**（通道 C i2i 返回 `rewritten_prompt` 改写结果）
+3. **Final Prompt**（通道 C i2i 返回 `rewritten_prompt` 改写结果）
 4. **Campaign Style Lock**，多图任务必须返回
-5. **Image Pack Plan**，包含每张图的编号、用途、尺寸、对应模板和短文案
+5. **Image Pack Plan（图片包计划）**，含 Hero / PDP Image Sequence（每张图编号、用途、尺寸、对应模板和短文案）
 6. **Generated Files**，全部产物须带通道前缀（A=`IMG-`、B=`GPT-`、C=`CF-`/`JM-`/`KL-`）并落 `<CWD>/output/ecom-details-image/<slug>/`；**每张图须在同目录附同名旁挂 `<前缀>-<基名>.prompt.txt`**（内容见「旁挂提示词文件规范」）
 7. **Assumptions / Notes**（含额度/算力消耗说明、依赖缺失提示）
+8. **Brief/Prompt Plan（`brief_prompt-<slug>.md`）**：在**调用引擎生成之前**，先把本次"计划/意图记录"写入 `<CWD>/output/ecom-details-image/<slug>/brief_prompt-<slug>.md`（含匹配模板、选用通道/引擎、Campaign Style Lock、Image Pack Plan、各图计划 Prompt 与参数、Assumptions），与「核心流程 · 第 9 步（提示词备忘录归档）」一致。生成后的各图实际种子/时间戳等**只写入对应旁挂 `<前缀>-<基名>.prompt.txt`（见步骤 12），不回填本备忘录**。
