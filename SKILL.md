@@ -128,7 +128,7 @@ python3 scripts/generate_image.py --env-file .env --prompt-file prompt.txt
 
 #### 3. t2i / i2i 路由判定
 
-- **t2i（文生图，无参考图）**：用户未给本地参考产品图时，沿用现有**英文 Prompt + GPT-Image-2 铁律**（hex 色值、数字占比、显式留白、否定清单、平台预留空间）。三引擎 t2i 与通道 B 共用同一套英文铁律，不另起炉灶。
+- **t2i（文生图，无参考图）**：用户未给本地参考产品图时，沿用现有**英文 Prompt + GPT-Image-2 铁律**（hex 色值、数字占比、显式留白、否定清单、平台预留空间）。三引擎 t2i 与通道 B 共用同一套英文铁律，不另起炉灶。**t2i 不接入 `qwen-image-2-1-prompter`**：prompter 的 T2I 范式（劝退 hex、禁止指令式否定清单、散文位置短语替代硬数字占比）与电商铁律在色准 / 负面约束 / 精确占比三处直接冲突，整体接入会剥掉电商护栏（实测证据见下方「Qwen t2i 打光增强」与 `output/ecom-details-image/洗衣凝珠t2iAB/` 的 A/B/A+ 样张与 memo）。**可选增强（低风险；实测验证后建议默认叠加）**：在铁律的「光线」句补一句显式打光，如 `with a gentle even shadow beneath the subject`，吸收 Qwen 的打光优势且不破坏 hex / 否定清单 / 预留位。
 - **i2i（图生图，有参考图）**：用户给了本地参考产品图（换背景 / 保真编辑 / 变体）时，改用**中文 Prompt**：
   - **Qwen**：走 `r2i` 工作流，且**必须先用 `qwen-image-2-1-prompter`（r2i 模式、中文）改写为 `rewritten_prompt`**，禁止把模板/简报原文直接传给 Qwen。
   - **即梦**：走 `dreamina image2image`，中文 Prompt 直传（见命令模板）。
@@ -370,6 +370,17 @@ Prompt 要足够具体，可以直接执行；也不要过度规定无关细节�
 ### 7. 批量出图优于反复调参
 
 一次批量出图，让 CTR 数据选风格，不要凭审美反复调参。
+
+### 8. Qwen t2i 打光增强（可选，低风险）
+
+Qwen-Image-2.1 对"显式打光句"更敏感；可在**不破坏本铁律护栏**的前提下，于「光线」描述补一句显式打光，拿到更自然通透的打光与底部均匀阴影：
+
+- 主图（1:1）：`soft diffused studio lighting with even illumination and a gentle even shadow beneath the subject`
+- 详情页竖图（2:3）：`soft diffused studio lighting with a gentle even shadow beneath the subject`
+
+**护栏不动**：hex 色值、数字占比、显式留白、末尾否定清单、平台预留空间一律原样保留。
+
+**实测依据**：`output/ecom-details-image/洗衣凝珠t2iAB/` 下做了 A（纯铁律）/ B（prompter T2I 8 步）/ A+（铁律+打光句）三方对照（同引擎 Qwen-Image-2.1、同产品、同种子）。结论：① t2i 走 prompter 会丢 hex / 否定 / 占比护栏且色偏清淡，不如纯铁律；② A+ 相比 A 打光更自然、相比 B 既保色准又获打光，跨种子稳定。故 **t2i 默认走纯铁律（不经 prompter），并建议默认叠加本打光句增强**。
 
 ---
 
@@ -723,7 +734,7 @@ Clean two-column layout. Product occupies 35%. Whitespace 48%+.
 
 ## 多图生成执行规则
 
-> **张数显式化**：默认单张，变体/网格/整包须先报张数。本规则仅在用户要求"整套/多图"时启用；单图请求默认 1 张（见上方「模板使用方式」张数显式化约定）。风格变体、网格类、整包（5+7）均须先报计划张数 + 触发原因、用户可随时要求撤销/不保存，**不自动应用**。
+> **张数显式化**：(默认单张，变体/网格/整包须先报张数) 本规则仅在用户要求"整套/多图"时启用；单图请求默认 1 张（见上方「模板使用方式」张数显式化约定）。风格变体、网格类、整包（5+7）均须先报计划张数 + 触发原因、用户可随时要求撤销/不保存，**不自动应用**。
 
 当用户要求直接生成整套电商图片：
 
@@ -789,7 +800,7 @@ python3 scripts/generate_image.py --prompt "..." --size 1:1
 - 如有用户参考图片：通道 A 传给 imagegen；通道 B 传入 `--image` / `--image-url`；通道 C i2i 已按对应引擎传参考图（Qwen `--image`、即梦 `--images`、可灵 `--image`）。
 - 负面约束覆盖常见失败点。
 - 输出和文件里没有 API key 或私密凭据。
-- 已应用 GPT-Image-2 铁律：hex 颜色、数字占比、显式留白、否定清单、平台预留空间（通道 B / 通道 C t2i 通用）。
+- 已应用 GPT-Image-2 铁律：hex 颜色、数字占比、显式留白、否定清单、平台预留空间（通道 B / 通道 C t2i 通用）。通道 C 的 **t2i 不经 `qwen-image-2-1-prompter`**（仅 r2i 必经 prompter 改写），并建议叠加「Qwen t2i 打光增强」的显式打光句（见 §5.8）。
 - 多图任务已分配不同角度和景别，无连续 3 张相同角度，全景图占比 ≤ 40%。
 - **详情页图片必须是电商信息图格式**（含标题、图标、标签、利益点、步骤或信任徽章），不是单纯的多角度产品照片。每张详情页 Prompt 以 `E-commerce infographic` 开头。
 - 出图后提醒用户放大 200% 逐字核对中文笔画。
